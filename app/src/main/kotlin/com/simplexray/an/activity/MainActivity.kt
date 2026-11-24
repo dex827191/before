@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Thread.setDefaultUncaughtExceptionHandler(ExceptionHandler(this))
 
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
