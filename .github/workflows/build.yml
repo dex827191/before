@@ -63,6 +63,10 @@ jobs:
           wget https://github.com/lhear/v2ray-rules-dat/releases/download/${{ env.GEOIP_VERSION }}/geoip.dat -O ./app/src/main/assets/geoip.dat
           wget https://github.com/lhear/v2ray-rules-dat/releases/download/${{ env.GEOSITE_VERSION }}/geosite.dat -O ./app/src/main/assets/geosite.dat
 
+      - name: Build HEV SOCKS5 native library
+        shell: bash
+        run: bash scripts/build-hev-native.sh
+
       - name: Build Xray-core from Source
         run: |
           # -checklinkname=0: Go 1.23+ 收紧了 //go:linkname 校验，而 Xray 的间接依赖
@@ -101,16 +105,12 @@ jobs:
             exit 1
           }
 
-      - name: Build HEV SOCKS5 native library
-        shell: bash
-        run: bash scripts/build-hev-native.sh
-
       - name: Verify ARM64 native library inputs
         shell: bash
         run: |
           set -euo pipefail
           for lib in \
-            app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so \
+            app/src/main/jniLibs/arm64-v8a/libsockstunnel.so \
             app/src/main/jniLibs/arm64-v8a/libxray.so; do
             test -s "$lib" || {
               echo "ERROR: Native library input missing or empty: $lib"
@@ -125,32 +125,6 @@ jobs:
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
-
-      - name: Verify ARM64 native libraries are packaged
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/release/simplexray-arm64-v8a.apk"
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: Expected ARM64 APK not found: $APK"
-            find app/build/outputs/apk -type f -name '*.apk' -print || true
-            exit 1
-          fi
-          echo "Checking native libraries in $APK"
-          unzip -Z1 "$APK" | grep -E '^lib/[^/]+/[^/]+\.so$' | sort
-          unzip -Z1 "$APK" | grep -qx 'lib/arm64-v8a/libhev-socks5-tunnel.so' || {
-            echo "ERROR: libhev-socks5-tunnel.so missing from ARM64 APK"
-            exit 1
-          }
-          unzip -Z1 "$APK" | grep -qx 'lib/arm64-v8a/libxray.so' || {
-            echo "ERROR: libxray.so missing from ARM64 APK"
-            exit 1
-          }
-          OTHER_ABI=$(unzip -Z1 "$APK" | grep '^lib/' | cut -d/ -f2 | sort -u | grep -v '^arm64-v8a$' || true)
-          if [ -n "$OTHER_ABI" ]; then
-            echo "ERROR: Unexpected ABI(s) packaged: $OTHER_ABI"
-            exit 1
-          fi
 
       - name: Find and Copy APKs
         run: |

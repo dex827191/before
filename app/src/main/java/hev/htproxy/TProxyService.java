@@ -14,7 +14,7 @@ public final class TProxyService {
     }
 
     static {
-        System.loadLibrary("hev-socks5-tunnel");
+        System.loadLibrary("sockstunnel");
     }
 
     public static native boolean TProxyStartService(String config_path, int fd);

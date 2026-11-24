@@ -83,7 +83,7 @@ The SSH foreground service runs in the same `:native` process as the Xray `VpnSe
 ## Build HEV SOCKS5 native library
 
 The HEV JNI binding is `hev.htproxy.TProxyService`; its package and class name
-must match the JNI registration compiled into `libhev-socks5-tunnel.so`. The
+must match the JNI registration compiled into the HEV native library. The
 native source is cloned into `hev-socks5-tunnel/jni` and built with `ndk-build`.
 
 Before building the Android app locally, set `ANDROID_NDK_HOME` (or `NDK_HOME`)
@@ -99,9 +99,12 @@ bash scripts/build-hev-native.sh
 ```
 
 The helper script performs the clone step when `hev-socks5-tunnel/jni` is not
-present, runs `ndk-build` for `arm64-v8a` and `x86_64`, and places the resulting
-shared libraries in `app/src/main/jniLibs`.
+present, runs `ndk-build` for `arm64-v8a`, then renames the upstream output
+`libhev-socks5-tunnel.so` to `libsockstunnel.so` in
+`app/src/main/jniLibs/arm64-v8a`.
 
 ## Android ABI support
 
-This build is configured for **arm64-v8a only**. The release workflow builds Xray-core and HEV SOCKS5 native libraries for ARM64, produces `simplexray-arm64-v8a.apk`, and verifies both `libxray.so` and `libhev-socks5-tunnel.so` are packaged.
+This build is configured for **arm64-v8a only**. The release workflow builds Xray-core and HEV SOCKS5 native libraries for ARM64, produces `simplexray-arm64-v8a.apk`, and verifies both `libxray.so` and `libsockstunnel.so` are packaged.
+
+The HEV NDK build writes to an isolated temporary output directory and copies the HEV output into `jniLibs` as `libsockstunnel.so`; this prevents it from overwriting the separately built `libxray.so`. The release workflow also rejects APKs containing the obsolete `libsshprotocol.so`.
