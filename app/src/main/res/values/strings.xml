@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="connectivity_test_url">https://www.google.com/generate_204</string>
+    <string name="geoip_url">https://github.com/lhear/v2ray-rules-dat/releases/latest/download/geoip.dat</string>
+    <string name="geosite_url">https://github.com/lhear/v2ray-rules-dat/releases/latest/download/geosite.dat</string>
+    <string name="source_url">https://github.com/lhear/SimpleXray</string>
     <string name="app_name">SimpleXray</string>
     <string name="socks_address">Alamat SOCKS Target</string>
     <string name="socks_port">Port SOCKS Target</string>

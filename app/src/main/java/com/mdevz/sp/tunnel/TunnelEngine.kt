@@ -778,29 +778,31 @@ class TunnelEngine(
             // Generation 0 means SSH is running as a local SOCKS5 upstream.
             // This is used by Chain mode: Xray owns the only Android VpnService
             // and routes its outbound traffic through this local SOCKS listener.
-            if (vpnGeneration > 0L) {
+            val controller: VpnTunnelController? = if (vpnGeneration > 0L) {
                 setState(TunnelState.STARTING_VPN)
 
-                val controller = vpnProtectBridge.awaitController(
+                val activeController = vpnProtectBridge.awaitController(
                     generation = vpnGeneration
                 )
 
                 lifecycleMutex.withLock {
-                    vpnController = controller
+                    vpnController = activeController
                 }
 
-                controller.start(localSocksPort = snapshot.localSocksPort)
+                activeController.start(localSocksPort = snapshot.localSocksPort)
                 currentCoroutineContext().ensureActive()
 
-                if (!controller.isRunning) {
+                if (!activeController.isRunning) {
                     throw TunnelRuntimeLostException(
                         "Android VPN native tunnel stopped during startup"
                     )
                 }
 
                 vpnProtectBridge.markRoutingActive(generation = vpnGeneration)
+                activeController
             } else {
                 logger.info("SSH SOCKS5 upstream ready; VPN routing is delegated to Xray")
+                null
             }
 
             val connectedAt =
@@ -838,7 +840,7 @@ class TunnelEngine(
                     throw keepAliveFailure.await()
                 }
 
-                if (!controller.isRunning) {
+                if (controller != null && !controller.isRunning) {
                     throw TunnelRuntimeLostException(
                         "Android VPN native tunnel stopped while connected"
                     )
@@ -850,28 +852,27 @@ class TunnelEngine(
                     )
                 }
 
-                val nativeTraffic =
-                    controller.trafficBytes()
+                if (controller != null) {
+                    val nativeTraffic = controller.trafficBytes()
 
-                lastAttemptRxBytes.accumulateAndGet(
-                    nativeTraffic.rxBytes,
-                    ::maxOf
-                )
+                    lastAttemptRxBytes.accumulateAndGet(
+                        nativeTraffic.rxBytes,
+                        ::maxOf
+                    )
 
-                lastAttemptTxBytes.accumulateAndGet(
-                    nativeTraffic.txBytes,
-                    ::maxOf
-                )
+                    lastAttemptTxBytes.accumulateAndGet(
+                        nativeTraffic.txBytes,
+                        ::maxOf
+                    )
 
-                rxBytes.set(
-                    completedRxBytes.get() +
-                        lastAttemptRxBytes.get()
-                )
+                    rxBytes.set(
+                        completedRxBytes.get() + lastAttemptRxBytes.get()
+                    )
 
-                txBytes.set(
-                    completedTxBytes.get() +
-                        lastAttemptTxBytes.get()
-                )
+                    txBytes.set(
+                        completedTxBytes.get() + lastAttemptTxBytes.get()
+                    )
+                }
 
                 publishTraffic()
             }

@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -50,10 +51,11 @@ fun DashboardScreen(
     mainViewModel: MainViewModel
 ) {
     val coreStats by mainViewModel.coreStatsState.collectAsState()
+    val appContext = LocalContext.current.applicationContext
     var selectedMode by rememberSaveable {
-        mutableStateOf(ProtocolSettings.mode(mainViewModel.application).name)
+        mutableStateOf(ProtocolSettings.mode(appContext).name)
     }
-    val savedSsh = ProtocolSettings.sshProfileFields(mainViewModel.application)
+    val savedSsh = ProtocolSettings.sshProfileFields(appContext)
     var sshHost by rememberSaveable { mutableStateOf(savedSsh?.sshHost.orEmpty()) }
     var sshPort by rememberSaveable { mutableStateOf((savedSsh?.sshPort ?: 22).toString()) }
     var sshUsername by rememberSaveable { mutableStateOf(savedSsh?.username.orEmpty()) }
@@ -96,11 +98,11 @@ fun DashboardScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ProtocolMode.entries.forEach { mode ->
                             if (selectedMode == mode.name) {
-                                Button(onClick = { selectedMode = mode.name; ProtocolSettings.setMode(mainViewModel.application, mode) }) {
+                                Button(onClick = { selectedMode = mode.name; ProtocolSettings.setMode(appContext, mode) }) {
                                     Text(mode.name)
                                 }
                             } else {
-                                OutlinedButton(onClick = { selectedMode = mode.name; ProtocolSettings.setMode(mainViewModel.application, mode) }) {
+                                OutlinedButton(onClick = { selectedMode = mode.name; ProtocolSettings.setMode(appContext, mode) }) {
                                     Text(mode.name)
                                 }
                             }
@@ -182,7 +184,7 @@ fun DashboardScreen(
                                 val port = sshPort.toIntOrNull() ?: error("Port SSH harus angka")
                                 val pPort = if (proxyEnabled) proxyPort.toIntOrNull() ?: error("Proxy port harus angka") else 0
                                 ProtocolSettings.saveSshFields(
-                                    mainViewModel.application, sshHost, port, sshUsername, sshPassword,
+                                    appContext, sshHost, port, sshUsername, sshPassword,
                                     payloadEnabled, payloadMode, payload, proxyEnabled, proxyHost, pPort,
                                     tlsEnabled, sni, tlsVersion
                                 )
