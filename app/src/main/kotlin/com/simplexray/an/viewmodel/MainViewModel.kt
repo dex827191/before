@@ -661,7 +661,7 @@ class MainViewModel(application: Application) :
                 return@launch
             }
             val mode = ProtocolSettings.mode(application)
-            if (mode != ProtocolMode.XRAY && action == TProxyService.ACTION_CONNECT) {
+            if (mode == ProtocolMode.SSH && action == TProxyService.ACTION_CONNECT) {
                 ProtocolSettings.setSshUpstreamReady(application, false)
                 val profileUri = ProtocolSettings.sshProfileUri(application)
                 try {
@@ -671,9 +671,10 @@ class MainViewModel(application: Application) :
 
                     // Start the one and only VPN first. This makes VpnService.protect()
                     // available before the SSH socket is opened, avoiding a VPN loop.
-                    _uiEvent.trySend(MainViewUiEvent.StartService(
+                    ContextCompat.startForegroundService(
+                        application,
                         Intent(application, TProxyService::class.java).setAction(TProxyService.ACTION_CONNECT)
-                    ))
+                    )
                     withTimeout(60_000) { _isServiceEnabled.first { it } }
 
                     val sshIntent = Intent(application, SshSocksService::class.java)
@@ -684,17 +685,23 @@ class MainViewModel(application: Application) :
 
                     // Reload Xray only after the SSH SOCKS upstream is listening.
                     ProtocolSettings.setSshUpstreamReady(application, true)
-                    _uiEvent.trySend(MainViewUiEvent.StartService(
+                    ContextCompat.startForegroundService(
+                        application,
                         Intent(application, TProxyService::class.java).setAction(TProxyService.ACTION_RELOAD_CONFIG)
-                    ))
+                    )
                 } catch (failure: Throwable) {
                     ProtocolSettings.setSshUpstreamReady(application, false)
-                    _uiEvent.trySend(MainViewUiEvent.StartService(
-                        Intent(application, TProxyService::class.java).setAction(TProxyService.ACTION_DISCONNECT)
-                    ))
-                    ContextCompat.startForegroundService(application,
-                        Intent(application, SshSocksService::class.java).setAction(SshSocksService.ACTION_STOP))
-                    _uiEvent.trySend(MainViewUiEvent.ShowSnackbar("Koneksi SSH/Chain gagal: ${failure.message}"))
+                    runCatching {
+                        application.startService(
+                            Intent(application, TProxyService::class.java).setAction(TProxyService.ACTION_DISCONNECT)
+                        )
+                    }
+                    runCatching {
+                        application.startService(
+                            Intent(application, SshSocksService::class.java).setAction(SshSocksService.ACTION_STOP)
+                        )
+                    }
+                    _uiEvent.trySend(MainViewUiEvent.ShowSnackbar("Koneksi SSH gagal: ${failure.message}"))
                     setControlMenuClickable(true)
                 }
                 return@launch

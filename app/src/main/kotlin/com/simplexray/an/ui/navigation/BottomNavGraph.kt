@@ -21,12 +21,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.simplexray.an.common.ROUTE_CONFIG
 import com.simplexray.an.common.ROUTE_LOG
+import com.simplexray.an.common.ROUTE_PROFILES
 import com.simplexray.an.common.ROUTE_SETTINGS
 import com.simplexray.an.common.ROUTE_STATS
 import com.simplexray.an.service.TProxyService
 import com.simplexray.an.ui.screens.ConfigScreen
 import com.simplexray.an.ui.screens.DashboardScreen
 import com.simplexray.an.ui.screens.LogScreen
+import com.simplexray.an.ui.screens.ProfilesScreen
 import com.simplexray.an.ui.screens.SettingsScreen
 import com.simplexray.an.viewmodel.LogViewModel
 import com.simplexray.an.viewmodel.MainViewModel
@@ -37,8 +39,9 @@ private const val TAG = "AppNavGraph"
 private val BOTTOM_NAV_ROUTE_INDEX = mapOf(
     ROUTE_STATS to 0,
     ROUTE_CONFIG to 1,
-    ROUTE_LOG to 2,
-    ROUTE_SETTINGS to 3
+    ROUTE_PROFILES to 2,
+    ROUTE_LOG to 3,
+    ROUTE_SETTINGS to 4
 )
 
 private fun NavBackStackEntry.routeIndex(): Int =
@@ -136,6 +139,16 @@ fun BottomNavHost(
                 mainViewModel = mainViewModel,
                 listState = configListState
             )
+        }
+
+        composable(
+            route = ROUTE_PROFILES,
+            enterTransition = { enterTransition() },
+            exitTransition = { exitTransition() },
+            popEnterTransition = { popEnterTransition() },
+            popExitTransition = { popExitTransition() }
+        ) {
+            ProfilesScreen()
         }
 
         composable(

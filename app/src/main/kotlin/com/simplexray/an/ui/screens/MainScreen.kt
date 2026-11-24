@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.application
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -19,8 +20,10 @@ import androidx.navigation.compose.rememberNavController
 import com.simplexray.an.common.NAVIGATION_DEBOUNCE_DELAY
 import com.simplexray.an.common.ROUTE_CONFIG
 import com.simplexray.an.common.ROUTE_LOG
+import com.simplexray.an.common.ROUTE_PROFILES
 import com.simplexray.an.common.ROUTE_SETTINGS
 import com.simplexray.an.common.ROUTE_STATS
+import com.simplexray.an.service.TProxyService
 import com.simplexray.an.common.rememberMainScreenCallbacks
 import com.simplexray.an.common.rememberMainScreenLaunchers
 import com.simplexray.an.ui.navigation.BottomNavHost
@@ -87,7 +90,17 @@ fun MainScreen(
                 }
 
                 is MainViewUiEvent.StartService -> {
-                    mainViewModel.application.startService(event.intent)
+                    try {
+                        when (event.intent.action) {
+                            TProxyService.ACTION_DISCONNECT,
+                            com.mdevz.sp.service.SshSocksService.ACTION_STOP ->
+                                mainViewModel.application.startService(event.intent)
+                            else -> ContextCompat.startForegroundService(mainViewModel.application, event.intent)
+                        }
+                    } catch (failure: Exception) {
+                        mainViewModel.setControlMenuClickable(true)
+                        snackbarHostState.showSnackbar("Tidak dapat menjalankan service: ${failure.message ?: failure.javaClass.simpleName}")
+                    }
                 }
 
                 is MainViewUiEvent.RefreshConfigList -> {
@@ -112,7 +125,7 @@ fun MainScreen(
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val mainScreenRoutes = listOf(ROUTE_STATS, ROUTE_CONFIG, ROUTE_LOG, ROUTE_SETTINGS)
+    val mainScreenRoutes = listOf(ROUTE_STATS, ROUTE_CONFIG, ROUTE_PROFILES, ROUTE_LOG, ROUTE_SETTINGS)
 
     if (currentRoute in mainScreenRoutes) {
         AppScaffold(

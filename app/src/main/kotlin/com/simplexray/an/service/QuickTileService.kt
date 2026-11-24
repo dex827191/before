@@ -9,6 +9,7 @@ import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import androidx.core.content.ContextCompat
 import android.util.Log
 
 class QuickTileService : TileService() {
@@ -99,7 +100,8 @@ class QuickTileService : TileService() {
         Intent(this, TProxyService::class.java).apply {
             this.action = action
         }.also { intent ->
-            startService(intent)
+            if (action == TProxyService.ACTION_DISCONNECT) startService(intent)
+            else ContextCompat.startForegroundService(this, intent)
         }
     }
 

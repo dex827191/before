@@ -22,6 +22,7 @@
     <string name="ipv6_enabled">Aktifkan IPv6 untuk Antarmuka VPN</string>
     <string name="new_profile">Profil Baru</string>
     <string name="configuration">Konfigurasi</string>
+    <string name="profiles">Profil</string>
     <string name="bypass_lan_title">Lewati LAN</string>
     <string name="bypass_lan_summary">Saat diaktifkan, lalu lintas LAN tidak akan melewati proksi.</string>
     <string name="use_template_title">Buat konfigurasi baru dari templat</string>

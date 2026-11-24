@@ -9,6 +9,7 @@ interface ConfigFormatConverter {
     companion object {
         val knownImplementations = listOf(
             SimpleXrayFormatConverter(),
+            VMessLinkConverter(),
             VlessLinkConverter(),
         )
 

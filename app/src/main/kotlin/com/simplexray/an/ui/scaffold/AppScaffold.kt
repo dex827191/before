@@ -44,6 +44,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.simplexray.an.R
 import com.simplexray.an.common.ROUTE_CONFIG
 import com.simplexray.an.common.ROUTE_LOG
+import com.simplexray.an.common.ROUTE_PROFILES
 import com.simplexray.an.common.ROUTE_SETTINGS
 import com.simplexray.an.common.ROUTE_STATS
 import com.simplexray.an.viewmodel.LogViewModel
@@ -141,6 +142,7 @@ fun AppTopAppBar(
     val title = when (currentRoute) {
         "stats" -> stringResource(R.string.core_stats_title)
         "config" -> stringResource(R.string.configuration)
+        "profiles" -> stringResource(R.string.profiles)
         "log" -> stringResource(R.string.log)
         "settings" -> stringResource(R.string.settings)
         else -> stringResource(R.string.app_name)
@@ -495,6 +497,18 @@ fun AppBottomNavigationBar(navController: NavHostController) {
                 )
             },
             label = { Text(stringResource(R.string.configuration)) }
+        )
+        NavigationBarItem(
+            alwaysShowLabel = false,
+            selected = currentRoute == ROUTE_PROFILES,
+            onClick = { navigateToRoute(navController, ROUTE_PROFILES) },
+            icon = {
+                Icon(
+                    painter = painterResource(id = R.drawable.code),
+                    contentDescription = stringResource(R.string.profiles)
+                )
+            },
+            label = { Text(stringResource(R.string.profiles)) }
         )
         NavigationBarItem(
             alwaysShowLabel = false,

@@ -64,21 +64,20 @@ Contributions are welcome! You can help by:
 
 This project is licensed under the **[Mozilla Public License Version 2.0](LICENSE)**.
 
-## Multi-protocol mode (Xray / SSH / Chain)
+## Multi-protocol mode (Xray / SSH)
 
-This fork includes the SSH Protocol transport stack in the SimpleXray application.
-The Dashboard exposes three modes:
+This fork includes the SSH transport stack in the SimpleXray application. The Profiles tab provides two modes:
 
-- **XRAY** — uses the selected Xray JSON configuration unchanged.
-- **SSH** — starts the SSH transport as a local SOCKS5 upstream and rewrites configured Xray egresses to use that upstream. Xray remains the sole owner of Android's VPN/TUN interface.
-- **CHAIN** — starts SSH first, then reloads Xray with `proxySettings.tag` pointing to the SSH SOCKS5 outbound. The packet path is Android TUN → Xray → SSH SOCKS5 → SSH server.
+- **XRAY** — uses the selected Xray JSON configuration.
+- **SSH** — connects the saved SSH profile as a local SOCKS5 upstream and routes Xray egress through it. Xray remains the owner of Android's VPN/TUN interface.
 
-Paste an SSH Protocol `sp://` profile URI in Dashboard and save it before selecting SSH or CHAIN. The SSH profile's configured local SOCKS port is used automatically. An `sp://` URI can also be opened through Android's link handler to save it.
+SSH host, port, username, password, payload, optional HTTP proxy, and TLS/SNI settings are managed in the dedicated **Profil** tab, not on the Dashboard. VMess links (`vmess://`) are decoded from Base64 JSON and converted to Xray JSON during import; VLESS links remain supported.
 
-The SSH foreground service runs in the same `:native` process as the Xray `VpnService` so its SSH transport sockets can call `VpnService.protect()` and avoid being captured by the tunnel they provide. Only the existing SimpleXray `TProxyService` owns the active TUN interface in SSH and CHAIN modes.
+The SSH foreground service runs in the same `:native` process as the Xray `VpnService` so its SSH transport sockets can call `VpnService.protect()` and avoid being captured by the tunnel they provide. Only the existing SimpleXray `TProxyService` owns the active TUN interface.
 
-**Build note:** GitHub Actions builds the Xray core and APK as before. The SSH integration is source-level and still needs a successful CI/device build before it should be considered release-ready. In this execution environment the Gradle wrapper could not download Gradle because outbound DNS/network access was unavailable.
+The VPN service no longer terminates its entire process from `onDestroy()`. It stops the HEV tunnel, closes the TUN descriptor, and lets Android manage the service process lifecycle.
 
+**Build note:** Gradle build verification still needs to run in GitHub Actions or Android Studio; the Gradle wrapper could not download Gradle in this environment because outbound DNS/network access was unavailable.
 
 ## Build HEV SOCKS5 native library
 
@@ -105,6 +104,6 @@ present, runs `ndk-build` for `arm64-v8a`, then renames the upstream output
 
 ## Android ABI support
 
-This build is configured for **arm64-v8a only**. The release workflow builds Xray-core and HEV SOCKS5 native libraries for ARM64, produces `simplexray-arm64-v8a.apk`, and verifies both `libxray.so` and `libsockstunnel.so` are packaged.
+This build is configured for **arm64-v8a only**. The release workflow builds Xray-core and HEV SOCKS5 native libraries for ARM64 and packages them into the release APK. APK-content validation is intentionally not part of the workflow.
 
-The HEV NDK build writes to an isolated temporary output directory and copies the HEV output into `jniLibs` as `libsockstunnel.so`; this prevents it from overwriting the separately built `libxray.so`. The release workflow also rejects APKs containing the obsolete `libsshprotocol.so`.
+The HEV NDK build writes to an isolated temporary output directory and copies the HEV output into `jniLibs` as `libsockstunnel.so`; this prevents it from overwriting the separately built `libxray.so`. The build script removes any stale `libsshprotocol.so` from native library inputs.

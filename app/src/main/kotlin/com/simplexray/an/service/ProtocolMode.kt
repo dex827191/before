@@ -1,3 +1,3 @@
 package com.simplexray.an.service
 
-enum class ProtocolMode { XRAY, SSH, CHAIN }
+enum class ProtocolMode { XRAY, SSH }

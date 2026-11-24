@@ -102,6 +102,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="simplexray" />
                 <data android:scheme="sp" />
+                <data android:scheme="vmess" />
+                <data android:scheme="vless" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />

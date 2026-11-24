@@ -37,7 +37,6 @@ import java.io.InputStreamReader
 import java.io.InterruptedIOException
 import java.net.ServerSocket
 import kotlin.concurrent.Volatile
-import kotlin.system.exitProcess
 
 class TProxyService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -82,6 +81,8 @@ class TProxyService : VpnService() {
     @Volatile
     private var xrayProcess: Process? = null
     private var tunFd: ParcelFileDescriptor? = null
+    @Volatile
+    private var hevStarted = false
 
     @Volatile
     private var reloadingRequested = false
@@ -93,8 +94,14 @@ class TProxyService : VpnService() {
         Log.d(TAG, "TProxyService created.")
     }
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
-        val action = intent.action
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        if (action != ACTION_DISCONNECT) {
+            // Promote the service immediately; native startup must not run before startForeground().
+            val channelName = if (Preferences(this).disableVpn) "nosocks" else "socks5"
+            initNotificationChannel(channelName)
+            createNotification(channelName)
+        }
         when (action) {
             ACTION_DISCONNECT -> {
                 stopXray()
@@ -114,6 +121,12 @@ class TProxyService : VpnService() {
                     Log.w(TAG, "Cannot reload config, VPN service is not running.")
                     return START_STICKY
                 }
+                if (ProtocolSettings.mode(this) == ProtocolMode.SSH &&
+                    !ProtocolSettings.sshUpstreamReady(this)
+                ) {
+                    Log.w(TAG, "Ignoring SSH config reload until SSH upstream is ready")
+                    return START_STICKY
+                }
                 Log.d(TAG, "Received RELOAD_CONFIG action.")
                 reloadingRequested = true
                 xrayProcess?.destroy()
@@ -129,10 +142,6 @@ class TProxyService : VpnService() {
                     val successIntent = Intent(ACTION_START)
                     successIntent.setPackage(application.packageName)
                     sendBroadcast(successIntent)
-
-                    @Suppress("SameParameterValue") val channelName = "nosocks"
-                    initNotificationChannel(channelName)
-                    createNotification(channelName)
 
                 } else {
                     startXray()
@@ -154,12 +163,21 @@ class TProxyService : VpnService() {
 
     override fun onDestroy() {
         if (activeInstance === this) activeInstance = null
-        super.onDestroy()
         handler.removeCallbacks(broadcastLogsRunnable)
         broadcastLogsRunnable.run()
+        runCatching { xrayProcess?.destroy() }
+        xrayProcess = null
+        runCatching { stopService(Intent(this, com.mdevz.sp.service.SshSocksService::class.java)) }
+        if (hevStarted) {
+            runCatching { hev.htproxy.TProxyService.TProxyStopService() }
+                .onFailure { Log.w(TAG, "Unable to stop HEV native tunnel during destroy", it) }
+            hevStarted = false
+        }
+        runCatching { tunFd?.close() }
+        tunFd = null
         serviceScope.cancel()
         Log.d(TAG, "TProxyService destroyed.")
-        exitProcess(0)
+        super.onDestroy()
     }
 
     override fun onRevoke() {
@@ -168,7 +186,15 @@ class TProxyService : VpnService() {
     }
 
     private fun startXray() {
-        startService()
+        if (!startVpnTunnel()) return
+        // In SSH mode, wait until the SSH SOCKS5 upstream is connected. MainViewModel
+        // sends ACTION_RELOAD_CONFIG after the SSH service reports CONNECTED.
+        if (ProtocolSettings.mode(this) == ProtocolMode.SSH &&
+            !ProtocolSettings.sshUpstreamReady(this)
+        ) {
+            Log.i(TAG, "VPN/HEV is ready; waiting for SSH upstream before starting Xray")
+            return
+        }
         serviceScope.launch { runXrayProcess() }
     }
 
@@ -177,15 +203,17 @@ class TProxyService : VpnService() {
         try {
             Log.d(TAG, "Attempting to start xray process.")
             val libraryDir = getNativeLibraryDir(applicationContext)
+                ?: throw IllegalStateException("Native library directory is unavailable")
             val prefs = Preferences(applicationContext)
             val selectedConfigPath = prefs.selectedConfigPath ?: return
             val xrayPath = "$libraryDir/libxray.so"
             var configContent = File(selectedConfigPath).readText()
             if (ProtocolSettings.sshUpstreamReady(applicationContext)) {
-                when (ProtocolSettings.mode(applicationContext)) {
-                    ProtocolMode.XRAY -> Unit
-                    ProtocolMode.SSH -> configContent = ChainConfigBuilder.applySshOnly(configContent, ProtocolSettings.sshLocalPort(applicationContext))
-                    ProtocolMode.CHAIN -> configContent = ChainConfigBuilder.applySshUpstream(configContent, port = ProtocolSettings.sshLocalPort(applicationContext))
+                if (ProtocolSettings.mode(applicationContext) == ProtocolMode.SSH) {
+                    configContent = SshConfigBuilder.applySshOnly(
+                        configContent,
+                        ProtocolSettings.sshLocalPort(applicationContext)
+                    )
                 }
             }
             val apiPort = findAvailablePort(extractPortsFromJson(configContent)) ?: return
@@ -271,41 +299,59 @@ class TProxyService : VpnService() {
         stopService()
     }
 
-    private fun startService() {
-        if (tunFd != null) return
+    private fun startVpnTunnel(): Boolean {
+        if (tunFd != null) return true
         val prefs = Preferences(this)
         val builder = getVpnBuilder(prefs)
-        tunFd = builder.establish()
-        if (tunFd == null) {
-            stopXray()
-            return
+        tunFd = try {
+            builder.establish()
+        } catch (failure: Throwable) {
+            Log.e(TAG, "Unable to establish VPN interface", failure)
+            null
         }
-        val tproxyFile = File(cacheDir, "tproxy.conf")
-        try {
-            tproxyFile.createNewFile()
-            FileOutputStream(tproxyFile, false).use { fos ->
-                val tproxyConf = getTproxyConf(prefs)
-                fos.write(tproxyConf.toByteArray())
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, e.toString())
-            stopXray()
-            return
-        }
-        tunFd?.fd?.let { fd ->
-            hev.htproxy.TProxyService.TProxyStartService(tproxyFile.absolutePath, fd)
-        } ?: run {
-            Log.e(TAG, "tunFd is null after establish()")
-            stopXray()
-            return
+        val establishedFd = tunFd
+        if (establishedFd == null) {
+            Log.e(TAG, "VPN establish() returned null")
+            exit()
+            return false
         }
 
-        val successIntent = Intent(ACTION_START)
-        successIntent.setPackage(application.packageName)
+        val tproxyFile = File(cacheDir, "tproxy.conf")
+        try {
+            FileOutputStream(tproxyFile, false).use { fos ->
+                fos.write(getTproxyConf(prefs).toByteArray())
+            }
+        } catch (failure: IOException) {
+            Log.e(TAG, "Unable to write HEV configuration", failure)
+            runCatching { hev.htproxy.TProxyService.TProxyStopService() }
+            runCatching { establishedFd.close() }
+            tunFd = null
+            exit()
+            return false
+        }
+
+        val nativeStarted = try {
+            hev.htproxy.TProxyService.TProxyStartService(
+                tproxyFile.absolutePath,
+                establishedFd.fd
+            )
+        } catch (failure: Throwable) {
+            Log.e(TAG, "Unable to start HEV SOCKS5 tunnel native library", failure)
+            false
+        }
+        if (!nativeStarted) {
+            Log.e(TAG, "HEV TProxyStartService returned false")
+            runCatching { hev.htproxy.TProxyService.TProxyStopService() }
+            runCatching { establishedFd.close() }
+            tunFd = null
+            exit()
+            return false
+        }
+
+        hevStarted = true
+        val successIntent = Intent(ACTION_START).setPackage(application.packageName)
         sendBroadcast(successIntent)
-        @Suppress("SameParameterValue") val channelName = "socks5"
-        initNotificationChannel(channelName)
-        createNotification(channelName)
+        return true
     }
 
     private fun getVpnBuilder(prefs: Preferences): Builder = Builder().apply {
@@ -351,15 +397,20 @@ class TProxyService : VpnService() {
     }
 
     private fun stopService() {
-        tunFd?.let {
+        tunFd?.let { descriptor ->
+            if (hevStarted) {
+                runCatching { hev.htproxy.TProxyService.TProxyStopService() }
+                    .onFailure { Log.w(TAG, "Unable to stop HEV native tunnel", it) }
+                hevStarted = false
+            }
             try {
-                it.close()
-            } catch (ignored: IOException) {
+                descriptor.close()
+            } catch (failure: IOException) {
+                Log.w(TAG, "Unable to close VPN descriptor", failure)
             } finally {
                 tunFd = null
             }
             stopForeground(Service.STOP_FOREGROUND_REMOVE)
-            hev.htproxy.TProxyService.TProxyStopService()
         }
         exit()
     }

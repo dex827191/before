@@ -127,7 +127,9 @@ class MainActivity : ComponentActivity() {
             Intent.ACTION_VIEW -> {
                 intent.data?.toString()?.let { uriString ->
                     when {
-                        uriString.startsWith("simplexray://") -> lifecycleScope.launch {
+                        uriString.startsWith("simplexray://") ||
+                            uriString.startsWith("vmess://", ignoreCase = true) ||
+                            uriString.startsWith("vless://", ignoreCase = true) -> lifecycleScope.launch {
                             mainViewModel.handleSharedContent(uriString)
                         }
                         uriString.startsWith("sp://") -> runCatching {
@@ -135,7 +137,7 @@ class MainActivity : ComponentActivity() {
                             ProtocolSettings.setSshProfileUri(this, uriString)
                             ProtocolSettings.setMode(this, ProtocolMode.SSH)
                         }.onSuccess {
-                            Toast.makeText(this, "Profil SSH diimpor. Pilih SSH di Dashboard.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this, "Profil SSH diimpor. Buka tab Profil untuk mengelolanya.", Toast.LENGTH_LONG).show()
                         }.onFailure {
                             Toast.makeText(this, "URI SSH tidak valid: ${it.message}", Toast.LENGTH_LONG).show()
                         }
