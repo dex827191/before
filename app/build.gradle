@@ -38,7 +38,7 @@ android {
         versionCode versionProps.APP_VERSION_CODE.toInteger()
         versionName versionProps.APP_VERSION_NAME
         ndk {
-            abiFilters "arm64-v8a", "x86_64"
+            abiFilters "arm64-v8a"
         }
         targetSdk 35
         minSdk 29
@@ -119,23 +119,17 @@ android {
         jvmTarget = '17'
     }
 
+    // ARM64 only: no x86_64 or universal APK generation.
     splits {
         abi {
-            enable true
-            reset()
-            include "arm64-v8a", "x86_64"
-            universalApk true
+            enable false
         }
     }
 
     applicationVariants.configureEach { variant ->
         variant.outputs.each { output ->
             def abiFilter = output.getFilter("ABI")
-            if (abiFilter != null) {
-                output.outputFileName = "simplexray-${abiFilter}.apk"
-            } else {
-                output.outputFileName = "simplexray-universal.apk"
-            }
+            output.outputFileName = "simplexray-arm64-v8a.apk"
         }
     }
 

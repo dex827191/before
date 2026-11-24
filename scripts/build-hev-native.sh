@@ -38,11 +38,11 @@ echo "Building HEV native library with ndk-build ..."
   NDK_PROJECT_PATH="$HEV_ROOT" \
   NDK_LIBS_OUT="$JNI_LIBS" \
   NDK_OUT="$HEV_ROOT/obj" \
-  APP_ABI="arm64-v8a x86_64" \
+  APP_ABI="arm64-v8a" \
   APP_PLATFORM="android-29" \
   APP_CFLAGS="-O3 -DPKGNAME=hev/htproxy"
 
-for abi in arm64-v8a x86_64; do
+for abi in arm64-v8a; do
   lib="$JNI_LIBS/$abi/libhev-socks5-tunnel.so"
   test -s "$lib" || { echo "ERROR: Native library missing: $lib" >&2; exit 1; }
   echo "Built: $lib"

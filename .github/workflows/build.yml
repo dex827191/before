@@ -85,25 +85,40 @@ jobs:
           export GOOS=android
           export CGO_ENABLED=1
 
-          # Build for arm64-v8a
-          echo "Building for arm64-v8a..."
+          # Build Xray-core for ARM64 only.
+          echo "Building Xray-core for arm64-v8a..."
           export GOARCH=arm64
-          export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          export CC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
           go build -o xray -trimpath -buildvcs=false -ldflags="-X github.com/xtls/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" -v ./main
-          mkdir -p ../app/src/main/jniLibs/arm64-v8a
-          mv xray ../app/src/main/jniLibs/arm64-v8a/libxray.so
 
-          # Build for x86_64
-          echo "Building for x86_64..."
-          export GOARCH=amd64
-          export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
-          go build -o xray -trimpath -buildvcs=false -ldflags="-X github.com/xtls/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" -v ./main
-          mkdir -p ../app/src/main/jniLibs/x86_64
-          mv xray ../app/src/main/jniLibs/x86_64/libxray.so
+          XRAY_LIB="../app/src/main/jniLibs/arm64-v8a/libxray.so"
+          mkdir -p "$(dirname "$XRAY_LIB")"
+          install -m 755 xray "$XRAY_LIB"
+          test -s "$XRAY_LIB"
+          file "$XRAY_LIB"
+          readelf -h "$XRAY_LIB" | grep -q 'AArch64' || {
+            echo "ERROR: libxray.so is not an AArch64 ELF library"
+            exit 1
+          }
 
       - name: Build HEV SOCKS5 native library
         shell: bash
         run: bash scripts/build-hev-native.sh
+
+      - name: Verify ARM64 native library inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for lib in \
+            app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so \
+            app/src/main/jniLibs/arm64-v8a/libxray.so; do
+            test -s "$lib" || {
+              echo "ERROR: Native library input missing or empty: $lib"
+              exit 1
+            }
+            file "$lib"
+          done
+          readelf -h app/src/main/jniLibs/arm64-v8a/libxray.so | grep -q 'AArch64'
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -111,23 +126,31 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      - name: Verify native libraries are packaged
+      - name: Verify ARM64 native libraries are packaged
         shell: bash
         run: |
           set -euo pipefail
-          APK=$(find app/build/outputs/apk/release -name '*arm64-v8a*.apk' -o -name '*universal*.apk' | head -n 1)
-          if [ -z "$APK" ]; then
-            APK=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          APK="app/build/outputs/apk/release/simplexray-arm64-v8a.apk"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: Expected ARM64 APK not found: $APK"
+            find app/build/outputs/apk -type f -name '*.apk' -print || true
+            exit 1
           fi
-          test -n "$APK"
-          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libhev-socks5-tunnel.so' || {
-            echo "ERROR: libhev-socks5-tunnel.so missing from arm64 APK"
+          echo "Checking native libraries in $APK"
+          unzip -Z1 "$APK" | grep -E '^lib/[^/]+/[^/]+\.so$' | sort
+          unzip -Z1 "$APK" | grep -qx 'lib/arm64-v8a/libhev-socks5-tunnel.so' || {
+            echo "ERROR: libhev-socks5-tunnel.so missing from ARM64 APK"
             exit 1
           }
-          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libxray.so' || {
-            echo "ERROR: libxray.so missing from arm64 APK"
+          unzip -Z1 "$APK" | grep -qx 'lib/arm64-v8a/libxray.so' || {
+            echo "ERROR: libxray.so missing from ARM64 APK"
             exit 1
           }
+          OTHER_ABI=$(unzip -Z1 "$APK" | grep '^lib/' | cut -d/ -f2 | sort -u | grep -v '^arm64-v8a$' || true)
+          if [ -n "$OTHER_ABI" ]; then
+            echo "ERROR: Unexpected ABI(s) packaged: $OTHER_ABI"
+            exit 1
+          fi
 
       - name: Find and Copy APKs
         run: |
