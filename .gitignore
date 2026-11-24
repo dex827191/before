@@ -1,0 +1,11 @@
+.gradle
+.idea
+app/.externalNativeBuild
+app/build
+app/debug
+app/release
+app/src/main/jniLibs
+app/src/main/jni/hev-socks5-tunnel
+local.properties
+app/src/main/assets/geoip.dat
+app/src/main/assets/geosite.dat

@@ -1,0 +1,211 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose' version "${kotlin_version}"
+    id 'com.google.protobuf' version '0.9.4'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.1'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.65.0'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {}
+            }
+            task.plugins {
+                grpc {}
+            }
+        }
+    }
+}
+
+def versionProps = new Properties()
+file("$rootDir/version.properties").withInputStream { versionProps.load(it) }
+
+android {
+    namespace "com.simplexray.an"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.simplexray.an"
+        versionCode versionProps.APP_VERSION_CODE.toInteger()
+        versionName versionProps.APP_VERSION_NAME
+        ndk {
+            abiFilters "arm64-v8a", "x86_64"
+        }
+        externalNativeBuild {
+            ndkBuild {
+                arguments "APP_CFLAGS+=-DPKGNAME=com/simplexray/an/service -ffile-prefix-map=${rootDir}=."
+                arguments "APP_LDFLAGS+=-Wl,--build-id=none"
+            }
+        }
+        targetSdk 35
+        minSdk 29
+    }
+
+    signingConfigs {
+        release {
+            enableV1Signing false
+            enableV2Signing false
+            enableV3Signing true
+        }
+    }
+
+    def isSigningEnabled = false
+    def propsFile = rootProject.file('store.properties')
+
+    if (propsFile.exists()) {
+        def props = new Properties()
+        props.load(new FileInputStream(propsFile))
+        if (props.containsKey('storeFile')) {
+            signingConfigs.release {
+                storeFile = rootProject.file(props['storeFile'])
+                storePassword = props['storePassword']
+                keyAlias = props['keyAlias']
+                keyPassword = props['keyPassword']
+
+                enableV1Signing false
+                enableV2Signing false
+                enableV3Signing true
+            }
+            isSigningEnabled = true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            signingConfig isSigningEnabled ? signingConfigs.release : null
+            
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+        }
+       debug {
+            minifyEnabled false
+            signingConfig isSigningEnabled ? signingConfigs.release : null
+            debuggable true
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path "src/main/jni/Android.mk"
+        }
+    }
+
+    lintOptions {
+        checkReleaseBuilds false
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError false
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    dependenciesInfo {
+        // Disables dependency metadata when building APKs.
+        includeInApk = false
+        // Disables dependency metadata when building Android App Bundles.
+        includeInBundle = false
+    }
+    ndkVersion versionProps.NDK_VERSION
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a", "x86_64"
+            universalApk true
+        }
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.each { output ->
+            def abiFilter = output.getFilter("ABI")
+            if (abiFilter != null) {
+                output.outputFileName = "simplexray-${abiFilter}.apk"
+            } else {
+                output.outputFileName = "simplexray-universal.apk"
+            }
+        }
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+
+    sourceSets {
+        main {
+            java {
+                srcDirs 'src/main/java', 'build/generated/source/proto/main/java'
+            }
+            kotlin {
+                srcDirs 'src/main/kotlin', 'build/generated/source/proto/main/grpckt'
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation "io.grpc:grpc-okhttp:1.74.0"
+    implementation "io.grpc:grpc-protobuf:1.74.0"
+    implementation "io.grpc:grpc-stub:1.74.0"
+    implementation "io.grpc:grpc-kotlin-stub:1.4.3"
+
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'com.google.code.gson:gson:2.13.1'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.core:core-ktx:1.16.0'
+
+    implementation platform('androidx.compose:compose-bom:2025.08.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.ui:ui-tooling-preview-android'
+    implementation 'androidx.activity:activity-compose'
+    implementation 'androidx.compose.runtime:runtime-livedata'
+    implementation 'androidx.navigation:navigation-compose-android:2.9.3'
+
+    implementation 'com.github.nanihadesuka:LazyColumnScrollbar:2.2.0'
+    implementation 'sh.calvin.reorderable:reorderable:2.5.1'
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+
+    // SSH Protocol engine dependencies
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.activity:activity-ktx:1.11.0'
+    implementation 'androidx.fragment:fragment-ktx:1.8.9'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.9.4'
+    implementation 'androidx.lifecycle:lifecycle-service:2.9.4'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.navigation:navigation-fragment-ktx:2.8.9'
+    implementation 'androidx.navigation:navigation-ui-ktx:2.8.9'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'org.conscrypt:conscrypt-android:2.5.3'
+    implementation 'net.i2p.crypto:eddsa:0.3.0'
+    implementation 'org.connectbot:jbcrypt:1.0.2'
+    implementation('com.google.crypto.tink:tink:1.23.0') {
+        exclude group: 'com.google.protobuf', module: 'protobuf-java'
+    }
+}
