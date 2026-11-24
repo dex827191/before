@@ -1,3 +1,1 @@
--keep class com.simplexray.an.service.TProxyService {
-    @kotlin.jvm.JvmStatic *;
-}
+-keep class hev.htproxy.TProxyService { *; }

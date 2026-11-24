@@ -40,12 +40,6 @@ android {
         ndk {
             abiFilters "arm64-v8a", "x86_64"
         }
-        externalNativeBuild {
-            ndkBuild {
-                arguments "APP_CFLAGS+=-DPKGNAME=com/simplexray/an/service -ffile-prefix-map=${rootDir}=."
-                arguments "APP_LDFLAGS+=-Wl,--build-id=none"
-            }
-        }
         targetSdk 35
         minSdk 29
     }
@@ -94,12 +88,6 @@ android {
             minifyEnabled false
             signingConfig isSigningEnabled ? signingConfigs.release : null
             debuggable true
-        }
-    }
-
-    externalNativeBuild {
-        ndkBuild {
-            path "src/main/jni/Android.mk"
         }
     }
 

@@ -22,9 +22,6 @@ class TunnelVpnService :
     private lateinit var runtime:
         TunnelRuntime
 
-    private val native =
-        TProxyService()
-
     private val running =
         AtomicBoolean(false)
 
@@ -261,7 +258,7 @@ class TunnelVpnService :
     override val isRunning: Boolean
         get() =
             running.get() &&
-                native.TProxyIsRunning()
+                TProxyService.TProxyIsRunning()
 
     override fun trafficBytes(): VpnTrafficBytes {
         if (!isRunning) {
@@ -272,7 +269,7 @@ class TunnelVpnService :
         }
 
         val stats =
-            native.TProxyGetStats()
+            TProxyService.TProxyGetStats()
 
         if (stats.size < 4) {
             throw IOException(
@@ -304,7 +301,7 @@ class TunnelVpnService :
                 if (
                     running.get() ||
                     tun != null ||
-                    native.TProxyIsRunning()
+                    TProxyService.TProxyIsRunning()
                 ) {
                     throw IllegalStateException(
                         "VPN tunnel is already running"
@@ -363,7 +360,7 @@ class TunnelVpnService :
                         }
 
                         val started =
-                            native.TProxyStartService(
+                            TProxyService.TProxyStartService(
                                 config.absolutePath,
                                 rawFd
                             )
@@ -378,14 +375,12 @@ class TunnelVpnService :
                             true
 
                         if (
-                            !native
-                                .TProxyIsRunning()
+                            !TProxyService.TProxyIsRunning()
                         ) {
 
                             val stopped =
                                 try {
-                                    native
-                                        .TProxyStopService()
+                                    TProxyService.TProxyStopService()
                                 } catch (
                                     failure: Throwable
                                 ) {
@@ -504,16 +499,14 @@ class TunnelVpnService :
             try {
 
                 val nativeRunning =
-                    native
-                        .TProxyIsRunning()
+                    TProxyService.TProxyIsRunning()
 
                 if (
                     running.get() ||
                     nativeRunning
                 ) {
                     val stopped =
-                        native
-                            .TProxyStopService()
+                        TProxyService.TProxyStopService()
 
                     if (!stopped) {
                         throw IOException(
@@ -523,8 +516,7 @@ class TunnelVpnService :
                 }
 
                 if (
-                    native
-                        .TProxyIsRunning()
+                    TProxyService.TProxyIsRunning()
                 ) {
                     throw IOException(
                         "hev-socks5-tunnel is still running after stop"

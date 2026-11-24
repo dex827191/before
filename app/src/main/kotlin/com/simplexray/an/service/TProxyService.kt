@@ -293,7 +293,7 @@ class TProxyService : VpnService() {
             return
         }
         tunFd?.fd?.let { fd ->
-            TProxyStartService(tproxyFile.absolutePath, fd)
+            hev.htproxy.TProxyService.TProxyStartService(tproxyFile.absolutePath, fd)
         } ?: run {
             Log.e(TAG, "tunFd is null after establish()")
             stopXray()
@@ -359,7 +359,7 @@ class TProxyService : VpnService() {
                 tunFd = null
             }
             stopForeground(Service.STOP_FOREGROUND_REMOVE)
-            TProxyStopService()
+            hev.htproxy.TProxyService.TProxyStopService()
         }
         exit()
     }
@@ -413,21 +413,6 @@ class TProxyService : VpnService() {
         private const val TAG = "VpnService"
         private const val BROADCAST_DELAY_MS: Long = 3000
 
-        init {
-            System.loadLibrary("hev-socks5-tunnel")
-        }
-
-        @JvmStatic
-        @Suppress("FunctionName")
-        private external fun TProxyStartService(configPath: String, fd: Int)
-
-        @JvmStatic
-        @Suppress("FunctionName")
-        private external fun TProxyStopService()
-
-        @JvmStatic
-        @Suppress("FunctionName")
-        private external fun TProxyGetStats(): LongArray?
 
         fun getNativeLibraryDir(context: Context?): String? {
             if (context == null) {
